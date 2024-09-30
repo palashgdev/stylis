@@ -25,7 +25,7 @@ describe('Prefixer', () => {
 		expect(prefix(`justify-content:flex-end;`, 15)).to.equal([`-webkit-box-pack:end;`, `-ms-flex-pack:end;`, `-webkit-justify-content:flex-end;`, `justify-content:flex-end;`].join(''))
 		expect(prefix(`justify-content:flex-start;`, 15)).to.equal([`-webkit-box-pack:start;`, `-ms-flex-pack:start;`, `-webkit-justify-content:flex-start;`, `justify-content:flex-start;`].join(''))
 		expect(prefix(`justify-content:justify;`, 15)).to.equal([`-webkit-box-pack:justify;`, `-ms-flex-pack:justify;`, `-webkit-justify-content:justify;`, `justify-content:justify;`].join(''))
-		expect(prefix(`justify-content:space-between;`, 15)).to.equal([`-webkit-box-pack:justify;`, `-webkit-justify-content:space-between;`, `justify-content:space-between;`].join(''))
+		expect(prefix(`justify-content:space-between;`, 15)).to.equal([`-webkit-box-pack:justify;`, '-ms-flex-pack:space-between;', `-webkit-justify-content:space-between;`, `justify-content:space-between;`].join(''))
 		expect(prefix(`justify-items:center;`, 13)).to.equal([`justify-items:center;`].join(''))
 		expect(prefix(`order:flex;`, 5)).to.equal([`-webkit-order:flex;`, `-ms-flex-order:flex;`, `order:flex;`].join(''))
 		expect(prefix(`flex-direction:column;`, 14)).to.equal([`-webkit-flex-direction:column;`, `-ms-flex-direction:column;`, `flex-direction:column;`].join(''))
@@ -177,6 +177,10 @@ describe('Prefixer', () => {
 		expect(prefix(`background-clip:text;`, 15)).to.equal([`-webkit-background-clip:text;`, `background-clip:text;`].join(''))
 	})
 
+	test('backdrop-filter', () => {
+		expect(prefix(`backdrop-filter:none;`, 15)).to.equal([`-webkit-backdrop-filter:none;`, `backdrop-filter:none;`].join(''))
+	})
+
 	test('margin-inline', () => {
 		expect(prefix(`margin-inline-start:20px;`, 19)).to.equal([`-webkit-margin-start:20px;`, `margin-inline-start:20px;`].join(''))
 		expect(prefix(`margin-inline-end:20px;`, 17)).to.equal([`-webkit-margin-end:20px;`, `margin-inline-end:20px;`].join(''))
@@ -270,5 +274,9 @@ describe('Prefixer', () => {
 
 	test('tab-size', () => {
 		expect(prefix(`tab-size:1;`, 8)).to.equal([`-moz-tab-size:1;`, `tab-size:1;`].join(''))
+	})
+
+	test('css variables', () => {
+		expect(prefix(`--CircularProgress-animation:0.5s linear;`, 28)).to.equal('--CircularProgress-animation:0.5s linear;')
 	})
 })

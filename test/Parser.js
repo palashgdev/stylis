@@ -1,6 +1,6 @@
 import {compile, serialize, stringify} from "../index.js"
 
-const stylis = string => serialize(compile(`.user{${string}}`), stringify)
+const stylis = (declarations, selectors = '.user') => serialize(compile(`${selectors}{${declarations}}`), stringify)
 
 describe('Parser', () => {
   test('unnested', () => {
@@ -122,6 +122,16 @@ describe('Parser', () => {
     ).to.equal(`.user{color:red;}`)
   })
 
+  test('& in value in a nested function', () => {
+    const urlOneX = "https://images.ctfassets.net/test.jpg?fm=webp&q=70&w=1000";
+    const urlTwoX = "https://images.ctfassets.net/test.jpg?fm=webp&q=70&w=2000";
+    expect(
+      stylis(`
+        background-image: image-set(url(${urlOneX}) 1x, url(${urlTwoX}) 2x);
+     `)
+    ).to.equal(`.user{background-image:image-set(url(${urlOneX}) 1x, url(${urlTwoX}) 2x);}`)
+  })
+
   test('& in a string', () => {
     expect(
       stylis(`
@@ -131,6 +141,45 @@ describe('Parser', () => {
      `)
     ).to.equal(`.user [href="https://css-tricks.com?a=1&b=2"]{color:red;}`)
   })
+
+  test('& root should be removed', () => {
+    expect(
+      stylis(`
+        color:red;
+     `, '&')
+    ).to.equal(``)
+  })
+
+  test('& root should be removed, issue: #333', () => {
+    expect(
+      stylis(`
+        color: red;
+     `, ':where(.cls)& span')
+    ).to.equal(`:where(.cls) span{color:red;}`)
+  })
+
+  test('noop removal of empty variables', () => {
+    expect(
+      stylis(`
+        --tw-brightness:/*!*/;
+     `)
+    ).to.equal(`.user{--tw-brightness:;}`)
+  })
+
+  test('& in first selector within a comma-separated list', () => {
+    expect(
+      stylis(`
+        div {
+          display: flex;
+
+          &.foo,
+          p:not(:last-child) {
+            background: red;
+          }
+        }
+      `)
+    ).to.equal(`.user div{display:flex;}.user div.foo,.user div p:not(:last-child){background:red;}`)
+  });
 
   test('escaped chars in selector identifiers', () => {
     expect(
@@ -145,7 +194,7 @@ describe('Parser', () => {
       '.user.\\@example\\.com{color:blue;}',
       '.user.owner\\/founder{color:green;}',
       // while double spaces after escaped hex codes need to be preserved,
-      // after an escaped character / code point it need not be preserved 
+      // after an escaped character / code point it need not be preserved
       '.user.discount\\%{color:purple;}'
     ].join(''))
   });
@@ -731,6 +780,26 @@ describe('Parser', () => {
     ).to.equal(`.user a a a a a a a a a a a a{color:red;}`)
   })
 
+  test('nesting @container multiple levels', () => {
+    expect(
+      stylis(`
+        div {
+          @container {
+            a {
+              color:red;
+
+        @container {
+                h1 {
+                  color:hotpink;
+                }
+              }
+            }
+          }
+        }
+      `)
+    ).to.equal([`@container{.user div a{color:red;}`, `@container{.user div a h1{color:hotpink;}}}`].join(''))
+  })
+
   test('nesting @media multiple levels', () => {
     expect(
       stylis(`
@@ -828,6 +897,15 @@ describe('Parser', () => {
     ].join(''))
   })
 
+  test('context character IX', () => {
+    expect(
+      stylis(`background: url(i&m&g.png);.a {background: url(i&m&g.png);}`)
+    ).to.equal([
+      `.user{background:url(i&m&g.png);}`,
+      `.user .a{background:url(i&m&g.png);}`
+    ].join(''))
+  })
+
   test('`--` in an identifier (#220)', () => {
     expect(
       stylis(`
@@ -873,6 +951,21 @@ describe('Parser', () => {
         }
       `)
     ).to.equal(`@media (min-width: 400px){.user div{border-left:1px solid hotpink;}.user span{border-top:none;}}`)
+  })
+
+  test('comment in a group of selectors inside a container query', () => {
+    expect(
+      stylis(`
+        @container (min-width: 400px) {
+          div /* comment */ {
+            border-left:1px solid hotpink;
+          }
+          span {
+            border-top:none;
+          }
+        }
+      `)
+    ).to.equal(`@container (min-width: 400px){.user div{border-left:1px solid hotpink;}.user span{border-top:none;}}`)
   })
 
   test('comment - bang at the start (#114)', () => {
@@ -1032,6 +1125,9 @@ describe('Parser', () => {
         @media {
           color:blue;
         }
+        @container (min-width: 250px) {
+          color:green;
+        }
       }
 
       &.foo {
@@ -1058,8 +1154,110 @@ describe('Parser', () => {
       `.user h1 header,.user div header{font-size:12px;}`+
       `@media{.user h1,.user div{color:red;}}`+
       `@media{.user h1,.user div{color:blue;}}`+
+      `@container (min-width: 250px){.user h1,.user div{color:green;}}`+
       `.user.foo.bar{color:orange;}`+
       `.user.foo.bar.barbar{color:orange;}`
     ].join(''))
   })
+
+  test('cascade @layer (#312)', () => {
+    expect(
+      stylis(`
+        @layer base {
+          border-left:1px solid hotpink;
+        }
+      `)
+    ).to.equal(`@layer base{.user{border-left:1px solid hotpink;}}`);
+
+    expect(
+      stylis(`
+        @layer base {
+          @layer layout {
+            border-left:1px solid hotpink;
+          }
+        }
+      `)
+    ).to.equal(`@layer base{@layer layout{.user{border-left:1px solid hotpink;}}}`);
+
+    expect(
+      stylis(`
+        @layer framework.layout {
+          border-left:1px solid hotpink;
+        }
+      `)
+    ).to.equal(`@layer framework.layout{.user{border-left:1px solid hotpink;}}`);
+
+    expect(
+      stylis(`
+        @import "theme.css" layer(utilties);
+      `)
+    ).to.equal(`@import "theme.css" layer(utilties);`);
+
+    expect(
+      stylis(`
+        @import "foo";
+      `)
+    ).to.equal(`@import "foo";`);
+
+    expect(
+      stylis(`
+        @layer utilities;
+      `)
+    ).to.equal(`@layer utilities;`);
+
+    expect(
+      stylis(`
+        @layer theme, layout, utilities;
+      `)
+    ).to.equal(`@layer theme,layout,utilities;`);
+
+    expect(
+      stylis(`
+        @media (min-width: 30em) {
+          @layer layout {
+            .title { font-size: x-large; }
+          }
+        }
+
+        @layer theme {
+          @media (prefers-color-scheme: dark) {
+            .title { color: white; }
+          }
+        }
+      `)
+    ).to.equal([
+      `@media (min-width: 30em){@layer layout{.user .title{font-size:x-large;}}}`,
+      `@layer theme{@media (prefers-color-scheme: dark){.user .title{color:white;}}}`
+    ].join(''));
+
+    expect(
+      stylis(`
+        @media (min-width: 30em) {
+          @layer layout {
+            .title { font-size: x-large; }
+          }
+        }
+
+        @layer theme {
+          @media (prefers-color-scheme: dark) {
+            .title { color: white; }
+          }
+        }
+      `)
+    ).to.equal([
+      `@media (min-width: 30em){@layer layout{.user .title{font-size:x-large;}}}`,
+      `@layer theme{@media (prefers-color-scheme: dark){.user .title{color:white;}}}`
+    ].join(''));
+
+    expect(
+      stylis(`
+        @layer framework {
+          @keyframes slide-left {
+            from { margin-left: 0; }
+            to { margin-left: -100%; }
+          }
+        }
+      `)
+    ).to.equal(`@layer framework{@keyframes slide-left{from{margin-left:0;}to{margin-left:-100%;}}}`);
+  });
 })
